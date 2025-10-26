@@ -1,0 +1,44 @@
+
+services:
+  # تعريف خدمة Traefik
+  traefik:
+    image: "traefik:v2.10"
+    command:
+      - "--api.insecure=true" # تمكين واجهة الويب الخاصة بـ Traefik
+      - "--providers.docker=true" # تمكين اكتشاف الحاويات من Docker
+      - "--entrypoints.web.address=:80" # تهيئة المدخل HTTP على المنفذ 80
+      - "--entrypoints.websecure.address=:443" # تهيئة المدخل HTTPS على المنفذ 443
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true" # تمكين التحدي HTTP للحصول على شهادة SSL مجانية من Let's Encrypt
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=youremail@example.com" # عنوان البريد الإلكتروني للحصول على الشهادات
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json" # مسار حفظ الشهادات
+    ports:
+      - "80:80"      # منفذ HTTP
+      - "443:443"    # منفذ HTTPS
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"  # تمكين Traefik من التفاعل مع Docker
+      - "./letsencrypt:/letsencrypt"  # تخزين الشهادات
+    labels:
+      - "traefik.enable=true"
+
+  # تعريف خدمة Umbraco 13
+  infinity-cloud:
+    image: infinity-cloud:latest
+    build: .
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.infinity-cloud.rule=Host(`infinity-cloud.modsoft.ae`)" # تحديد القاعدة لتوجيه الطلبات إلى هذا التطبيق
+      - "traefik.http.routers.infinity-cloud.entrypoints=web" # توجيه الحركة عبر المدخل HTTP
+      - "traefik.http.routers.infinity-cloud-secure.rule=Host(`infinity-cloud.modsoft.ae`)" # القاعدة الخاصة بالـ HTTPS
+      - "traefik.http.routers.infinity-cloud-secure.entrypoints=websecure" # توجيه الحركة عبر المدخل HTTPS
+      - "traefik.http.routers.infinity-cloud-secure.tls=true" # تمكين SSL
+      - "traefik.http.routers.infinity-cloud-secure.tls.certresolver=myresolver" # استخدام Traefik للحصول على شهادة SSL من Let's Encrypt
+
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    networks:
+      - web
+
+networks:
+  web:
+    driver: bridge
